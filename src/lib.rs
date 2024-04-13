@@ -6,48 +6,6 @@ mod trnsys;
 mod trnsys_type;
 
 
-fn read_parameters(
-    params: &mut Vec<TrnsysValue>,
-    inputs: &mut Vec<TrnsysValue>,
-    outputs: &mut Vec<TrnsysValue>) {
-    let num_params = get_number_of_parameters();
-    *params = (1..num_params + 1)
-        .map(|i| TrnsysValue {
-            value: get_parameter_value(i)
-        })
-        .collect();
-    let num_inputs = get_number_of_inputs();
-    *inputs = (1..num_inputs + 1)
-        .map(|i| TrnsysValue {
-            value: get_input_value(i)
-        })
-        .collect();
-    let num_outputs = get_number_of_outputs();
-    *outputs = (1..num_outputs + 1)
-        .map(|i| TrnsysValue {
-            value: get_output_value(i)
-        })
-        .collect();
-}
-
-fn read_storage(
-    static_store: &mut Vec<TrnsysValue>,
-    dynamic_store: &mut Vec<TrnsysValue>,
-    num_static_store: i32,
-    num_dynamic_store: i32,
-) {
-    *static_store = (1..num_static_store + 1)
-        .map(|i| TrnsysValue {
-            value: get_static_array_value(i)
-        })
-        .collect();
-
-    *dynamic_store = (1..num_dynamic_store + 1)
-        .map(|i| TrnsysValue {
-            value: get_dynamic_array_value_last_timestep(i)
-        })
-        .collect();
-}
 
 
 #[no_mangle]
@@ -119,4 +77,48 @@ pub extern "C" fn TYPE256() {
         // attention: TRNSYS/Fortran is 1-indexed
         set_output_value(i as i32 + 1, val.value);
     });
+}
+
+
+fn read_parameters(
+    params: &mut Vec<TrnsysValue>,
+    inputs: &mut Vec<TrnsysValue>,
+    outputs: &mut Vec<TrnsysValue>) {
+    let num_params = get_number_of_parameters();
+    *params = (1..num_params + 1)
+        .map(|i| TrnsysValue {
+            value: get_parameter_value(i)
+        })
+        .collect();
+    let num_inputs = get_number_of_inputs();
+    *inputs = (1..num_inputs + 1)
+        .map(|i| TrnsysValue {
+            value: get_input_value(i)
+        })
+        .collect();
+    let num_outputs = get_number_of_outputs();
+    *outputs = (1..num_outputs + 1)
+        .map(|i| TrnsysValue {
+            value: get_output_value(i)
+        })
+        .collect();
+}
+
+fn read_storage(
+    static_store: &mut Vec<TrnsysValue>,
+    dynamic_store: &mut Vec<TrnsysValue>,
+    num_static_store: i32,
+    num_dynamic_store: i32,
+) {
+    *static_store = (1..num_static_store + 1)
+        .map(|i| TrnsysValue {
+            value: get_static_array_value(i)
+        })
+        .collect();
+
+    *dynamic_store = (1..num_dynamic_store + 1)
+        .map(|i| TrnsysValue {
+            value: get_dynamic_array_value_last_timestep(i)
+        })
+        .collect();
 }
