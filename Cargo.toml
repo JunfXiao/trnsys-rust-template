@@ -13,7 +13,6 @@ crate-type= ["cdylib"]
 
 
 [dependencies]
-paste = "1.0"
 
 
 [build-dependencies]
