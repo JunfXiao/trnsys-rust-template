@@ -20,95 +20,107 @@ mod util;
 
 // This file declares all the global functions available to C / C++ TRNSYS Types
 
-enum Severity {
+pub(crate) enum Severity {
     Notice,
     Warning,
     Fatal,
 }
 
 impl Severity {
-    fn as_mut_c_char(&self) -> *mut c_char {
+    fn as_cstring(&self) -> CString {
         match self {
-            Severity::Notice => CString::new("notice").unwrap().into_raw(),
-            Severity::Warning => CString::new("warning").unwrap().into_raw(),
-            Severity::Fatal => CString::new("fatal").unwrap().into_raw(),
+            Severity::Notice => CString::new("notice").unwrap(),
+            Severity::Warning => CString::new("warning").unwrap(),
+            Severity::Fatal => CString::new("fatal").unwrap(),
         }
     }
 }
 
 pub fn found_bad_input(input: &mut i32, severity: Severity, message: &str) {
     unsafe {
-        let severity = severity.as_mut_c_char();
-        let message = CString::new(message).unwrap().into_raw();
-        ext_c::FOUNDBADINPUT(input, severity, message, severity.len(), message.len());
+        let severity = severity.as_cstring();
+        let message = CString::new(message).unwrap();
+        ext_c::FOUNDBADINPUT(
+            input,
+            severity.clone().into_raw(),
+            message.clone().into_raw(),
+            severity.as_bytes().len(),
+            message.as_bytes().len(),
+        );
     }
 }
 
 pub fn found_bad_parameter(param: &mut i32, severity: Severity, message: &str) {
     unsafe {
-        let severity = severity.as_mut_c_char();
-        let message = CString::new(message).unwrap().into_raw();
-        ext_c::FOUNDBADPARAMETER(param, severity, message, severity.len(), message.len());
+        let severity = severity.as_cstring();
+        let message = CString::new(message).unwrap();
+        ext_c::FOUNDBADPARAMETER(
+            param,
+            severity.clone().into_raw(),
+            message.clone().into_raw(),
+            severity.as_bytes().len(),
+            message.as_bytes().len(),
+        );
     }
 }
 
 pub fn init_report_integral(index: &mut i32, int_name: &str, inst_unit: &str, int_unit: &str) {
     unsafe {
-        let int_name = CString::new(int_name).unwrap();
-        let inst_unit = CString::new(inst_unit).unwrap();
-        let int_unit = CString::new(int_unit).unwrap();
+        let cstr_int_name = CString::new(int_name).unwrap();
+        let cstr_inst_unit = CString::new(inst_unit).unwrap();
+        let cstr_int_unit = CString::new(int_unit).unwrap();
         ext_c::INITREPORTINTEGRAL(
             index,
-            int_name.as_ptr() as *mut c_char,
-            inst_unit.as_ptr() as *mut c_char,
-            int_unit.as_ptr() as *mut c_char,
-            int_name.to_bytes().len(),
-            inst_unit.to_bytes().len(),
-            int_unit.to_bytes().len(),
+            cstr_int_name.as_ptr() as *mut c_char,
+            cstr_inst_unit.as_ptr() as *mut c_char,
+            cstr_int_unit.as_ptr() as *mut c_char,
+            int_name.len(),
+            inst_unit.len(),
+            int_unit.len(),
         );
     }
 }
 
 pub fn init_report_min_max(index: &mut i32, minmax_name: &str, minmax_unit: &str) {
     unsafe {
-        let minmax_name = CString::new(minmax_name).unwrap();
-        let minmax_unit = CString::new(minmax_unit).unwrap();
+        let cstr_minmax_name = CString::new(minmax_name).unwrap();
+        let cstr_minmax_unit = CString::new(minmax_unit).unwrap();
         ext_c::INITREPORTMINMAX(
             index,
-            minmax_name.as_ptr() as *mut c_char,
-            minmax_unit.as_ptr() as *mut c_char,
-            minmax_name.to_bytes().len(),
-            minmax_unit.to_bytes().len(),
+            cstr_minmax_name.as_ptr() as *mut c_char,
+            cstr_minmax_unit.as_ptr() as *mut c_char,
+            minmax_name.len(),
+            minmax_unit.len(),
         );
     }
 }
 
 pub fn init_report_text(index: &mut i32, txt_name: &str, txt_val: &str) {
     unsafe {
-        let txt_name = CString::new(txt_name).unwrap();
-        let txt_val = CString::new(txt_val).unwrap();
+        let cstr_txt_name = CString::new(txt_name).unwrap();
+        let cstr_txt_val = CString::new(txt_val).unwrap();
         ext_c::INITREPORTTEXT(
             index,
-            txt_name.as_ptr() as *mut c_char,
-            txt_val.as_ptr() as *mut c_char,
-            txt_name.to_bytes().len(),
-            txt_val.to_bytes().len(),
+            cstr_txt_name.as_ptr() as *mut c_char,
+            cstr_txt_val.as_ptr() as *mut c_char,
+            txt_name.len(),
+            txt_val.len(),
         );
     }
 }
 
 pub fn init_report_value(index: &mut i32, val_name: &str, val_val: &f64, val_unit: &str) {
     unsafe {
-        let val_name = CString::new(val_name).unwrap();
-        let val_unit = CString::new(val_unit).unwrap();
+        let cstr_val_name = CString::new(val_name).unwrap();
+        let cstr_val_unit = CString::new(val_unit).unwrap();
         let mut val_val = *val_val as c_double;
         ext_c::INITREPORTVALUE(
             index,
-            val_name.as_ptr() as *mut c_char,
+            cstr_val_name.as_ptr() as *mut c_char,
             &mut val_val,
-            val_unit.as_ptr() as *mut c_char,
-            val_name.to_bytes().len(),
-            val_unit.to_bytes().len(),
+            cstr_val_unit.as_ptr() as *mut c_char,
+            val_name.len(),
+            val_unit.len(),
         );
     }
 }
@@ -131,12 +143,8 @@ pub fn set_dynamic_array_value_this_iteration(mut i: i32, mut value: f64) {
 
 pub fn set_input_units(mut i: i32, string: &str) {
     unsafe {
-        let string = CString::new(string).unwrap();
-        ext_c::SETINPUTUNITS(
-            &mut i,
-            string.as_ptr() as *mut c_char,
-            string.to_bytes().len(),
-        );
+        let cstr = CString::new(string).unwrap();
+        ext_c::SETINPUTUNITS(&mut i, cstr.as_ptr() as *mut c_char, string.len());
     }
 }
 
@@ -185,12 +193,8 @@ pub fn set_numerical_derivative(mut i: i32, mut value: f64) {
 
 pub fn set_output_units(mut i: i32, string: &str) {
     unsafe {
-        let string = CString::new(string).unwrap();
-        ext_c::SETOUTPUTUNITS(
-            &mut i,
-            string.as_ptr() as *mut c_char,
-            string.to_bytes().len(),
-        );
+        let cstr = CString::new(string).unwrap();
+        ext_c::SETOUTPUTUNITS(&mut i, cstr.as_ptr() as *mut c_char, string.len());
     }
 }
 
