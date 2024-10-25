@@ -9,12 +9,9 @@ It is based on the TrnSys C++ Template and Documentation, which can be found und
 1. Clone this repository
 2. Put the `TRNDll64.lib` under the `lib` folder
 3. Change the project name in `Cargo.toml` if needed
-4. Change the Type number in `src/lib.rs` to the desired type number, e.g. \
-```rust
-pub extern "C" fn TYPE256 (){
-...
-```
-6. Write your calculation logic in the `src/trnsys_type.rs` file, where you can use all the functions in different simulation time as documented.
+4. Set your type number in `Cargo.toml`, too.
+5. Write your calculation logic in the `src/trnsys_type.rs` file, where you can use all the functions in different
+   simulation time as documented.
 
 ## Advanced Usage
 
