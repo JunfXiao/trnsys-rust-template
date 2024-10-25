@@ -1,8 +1,9 @@
-use crate::trnsys::param::TrnsysValue;
+use crate::storage::StoreProvider;
 use crate::trnsys::iteration_mode::IterationMode;
+use crate::trnsys::param::TrnsysValue;
 use crate::trnsys::*;
 
-pub struct TrnsysType {
+pub struct TrnSysState<D = (), S = ()> {
     pub(crate) trnsys_standard_version: i32,
     pub(crate) num_params: i32,
     pub(crate) params: Vec<TrnsysValue>,
@@ -14,16 +15,17 @@ pub struct TrnsysType {
     pub(crate) outputs: Vec<TrnsysValue>,
     pub(crate) iteration_mode: IterationMode,
     /// The number of stored variables （static, dynamic）
-    pub(crate) num_stored_variables: (i32, i32),
-    pub(crate) static_store: Vec<TrnsysValue>,
-    pub(crate) variable_store: Vec<TrnsysValue>,
-
+    // pub(crate) num_stored_variables: (i32, i32),
+    // pub(crate) static_store: Vec<TrnsysValue>,
+    // pub(crate) variable_store: Vec<TrnsysValue>,
+    pub(crate) dynamic_store: Option<Box<dyn StoreProvider<D>>>,
+    pub(crate) static_store: Option<Box<dyn StoreProvider<S>>>,
 }
 
-impl TrnsysType {
+impl TrnSysState {
     /// set up parameters for the TRNSYS type
     pub fn new() -> Self {
-        TrnsysType {
+        TrnSysState {
             trnsys_standard_version: 17,
             iteration_mode: IterationMode::default(),
 
@@ -39,9 +41,10 @@ impl TrnsysType {
             outputs: vec![],
             default_output_values: vec![],
 
-            num_stored_variables: (0, 0),
-            static_store: vec![],
-            variable_store: vec![],
+            // num_stored_variables: (0, 0),
+            // TODO: Use storage if you need to read states from last iteration/time step
+            static_store: None,
+            dynamic_store: None,
         }
     }
 
@@ -53,15 +56,15 @@ impl TrnsysType {
 
     /// Validate the input parameters.
     /// If not valid, call `found_bad_input` or `found_bad_parameter` to stop the simulation.
+    ///
+    /// You can still change the number of inputs or outputs at this time.
+    /// Later changes will not take effect.
     pub fn validate_parameters(&self) {
         // Validate the parameters
     }
     /// This function is called at the beginning of each simulation.
     /// Do start calculations here and store the results in the static store
-    pub fn simulation_starts(&self) {
-
-    }
-
+    pub fn simulation_starts(&self) {}
 
     /// Whether the simulation ends correctly or ends in error, each Type is recalled by the TRNSYS
     /// kernel before the simulation shuts down.
@@ -87,17 +90,15 @@ impl TrnsysType {
     /// in the dynamic storage
     pub fn end_of_timestep(&self) {
         // Perform Any "End of Timestep" Manipulations That May Be Required
-
     }
-
-
-
-
     pub fn initialize_outputs(&self) {
         // initialize output values
-        self.default_output_values.iter().enumerate().for_each(|(i, val)| {
-            // attention: TRNSYS/Fortran is 1-indexed
-            set_output_value(i as i32 + 1, val.value);
-        });
+        self.default_output_values
+            .iter()
+            .enumerate()
+            .for_each(|(i, val)| {
+                // attention: TRNSYS/Fortran is 1-indexed
+                set_output_value(i as i32 + 1, val.value);
+            });
     }
 }

@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[package.metadata.trnsys]
+type_number = 256
 
 [lib]
 name = "trnsys_rust_template"
@@ -16,3 +18,4 @@ crate-type= ["cdylib"]
 
 
 [build-dependencies]
+toml = "0.8"
