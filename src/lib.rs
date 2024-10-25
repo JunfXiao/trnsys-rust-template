@@ -26,7 +26,7 @@ fn get_current_state() -> Arc<RwLock<TrnSysState>> {
 fn entrance() {
     // create type instance
 
-    let mut state_lock = get_current_state();
+    let state_lock = get_current_state();
     let mut state = state_lock.write().unwrap();
 
     if is_version_signing_time() {
