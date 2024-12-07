@@ -428,7 +428,6 @@ dependencies = [
 name = "trnsys_rust_template"
 version = "0.1.0"
 dependencies = [
- "log",
  "thiserror",
  "toml",
  "tracing",

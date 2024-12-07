@@ -2,11 +2,10 @@ use crate::logging::init_tracing;
 use crate::trnsys::error::{TrnSysError, TrnSysErrorHandler};
 use crate::trnsys::logging::cleanup_tracing;
 use crate::trnsys_type::TrnSysType;
-use log::info;
 use std::collections::HashMap;
 use std::ops::DerefMut;
 use std::sync::{Arc, LazyLock, RwLock};
-use tracing::error;
+use tracing::{debug, error, info};
 use trnsys::*;
 
 mod storage;
@@ -61,10 +60,10 @@ fn main(mut state: &mut TrnSysState) -> Result<(), TrnSysError> {
 
         type_instance.first_call_of_simulation(&mut state)?;
 
-        info!("Number of Inputs: {}", state.num_inputs);
-        info!("Number of Parameters: {}", state.num_params);
-        info!("Number of Outputs: {}", state.num_outputs);
-        info!("Number of Derivatives: {}", state.num_derivatives);
+        debug!("Number of Inputs: {}", state.num_inputs);
+        debug!("Number of Parameters: {}", state.num_params);
+        debug!("Number of Outputs: {}", state.num_outputs);
+        debug!("Number of Derivatives: {}", state.num_derivatives);
 
         set_number_of_parameters(state.num_params);
         set_number_of_inputs(state.num_inputs);
