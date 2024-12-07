@@ -1,7 +1,12 @@
-use crate::trnsys::param::TrnsysValue;
-use crate::trnsys_type::TrnSysState;
+use crate::logging::init_tracing;
+use crate::trnsys::error::{TrnSysError, TrnSysErrorHandler};
+use crate::trnsys::logging::cleanup_tracing;
+use crate::trnsys_type::TrnSysType;
+use log::info;
 use std::collections::HashMap;
+use std::ops::DerefMut;
 use std::sync::{Arc, LazyLock, RwLock};
+use tracing::error;
 use trnsys::*;
 
 mod storage;
@@ -13,6 +18,12 @@ include!(concat!(env!("OUT_DIR"), "/generated_entrance.rs"));
 static TRNSYS_STATE_DICT: LazyLock<RwLock<HashMap<i32, Arc<RwLock<TrnSysState>>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
+static TRNSYS_TYPE_INSTANCE: LazyLock<Arc<TrnSysType>> = LazyLock::new(|| {
+    // initialize the logging only once
+    init_tracing(None);
+    Arc::new(TrnSysType::new())
+});
+
 fn get_current_state() -> Arc<RwLock<TrnSysState>> {
     let mut dict = (&TRNSYS_STATE_DICT).write().unwrap();
     let unit = get_current_unit();
@@ -22,103 +33,91 @@ fn get_current_state() -> Arc<RwLock<TrnSysState>> {
         .clone()
 }
 
-#[no_mangle]
 fn entrance() {
-    // create type instance
-
     let state_lock = get_current_state();
     let mut state = state_lock.write().unwrap();
+    // create type instance
+    match main(state.deref_mut()) {
+        Ok(_) => {}
+        Err(e) => {
+            e.handle_in_trnsys(state.deref_mut());
+            error!("{:?}", e);
+        }
+    }
+}
+
+fn main(mut state: &mut TrnSysState) -> Result<(), TrnSysError> {
+    let type_instance = TRNSYS_TYPE_INSTANCE.clone();
 
     if is_version_signing_time() {
         set_type_version(state.trnsys_standard_version);
-        return;
+        return Ok(());
     } else if is_first_call_of_simulation() {
         // Tell the TRNSYS Engine How This Type Works
+        state.num_inputs = get_number_of_inputs();
+        state.num_params = get_number_of_parameters();
+        state.num_outputs = get_number_of_outputs();
+        state.num_derivatives = get_number_of_derivatives();
+
+        type_instance.first_call_of_simulation(&mut state)?;
+
+        info!("Number of Inputs: {}", state.num_inputs);
+        info!("Number of Parameters: {}", state.num_params);
+        info!("Number of Outputs: {}", state.num_outputs);
+        info!("Number of Derivatives: {}", state.num_derivatives);
+
         set_number_of_parameters(state.num_params);
         set_number_of_inputs(state.num_inputs);
         set_number_of_derivatives(state.num_derivatives);
         set_number_of_outputs(state.num_outputs);
         set_iteration_mode(state.iteration_mode.into());
-        // set_number_stored_variables(state.num_stored_variables.0, state.num_stored_variables.1);
-
-        state.first_call_of_simulation();
-        return;
+        return Ok(());
     }
+    state.read_input_values();
+    state.read_parameter_values();
 
-    read_parameters(&mut state);
     // read_storage(&mut state);
 
     if is_last_call_of_simulation() {
-        state.simulation_ends();
-        return;
-    } else if is_end_of_timestep() {
-        state.end_of_timestep();
-        return;
-    } else if is_start_time() {
-        // Read in the Values of the Parameters from the Input File
-        read_parameters(&mut state);
+        type_instance.simulation_ends(&mut state)?;
+        cleanup_tracing();
+        return Ok(());
+    }
 
+    if is_end_of_timestep() {
+        type_instance.end_of_timestep(&mut state)?;
+        return Ok(());
+    }
+
+    if is_start_time() {
         // validate parameters
-        state.validate_parameters();
-        if error_found() {
-            return;
-        }
+        type_instance.validate_parameters(&mut state)?;
         // initialize outputs
-        state.initialize_outputs();
+        type_instance
+            .get_default_output_values(&mut state)?
+            .iter()
+            .enumerate()
+            .for_each(|(i, val)| {
+                // attention: TRNSYS/Fortran is 1-indexed
+                set_output_value(i as i32, val.value);
+            });
 
-        state.simulation_starts();
-        return;
+        type_instance.simulation_starts(&mut state)?;
+        return Ok(());
     }
 
     if is_reread_parameters() {
-        read_parameters(&mut state);
+        state.read_parameter_values();
+        state.read_input_values();
         // read_storage(&mut state);
     }
     // Perform All the Calculations Here
-    let simulation_results = state.iterate();
+    let simulation_outputs = type_instance.iterate(&mut state)?;
     // set output
-    simulation_results.iter().enumerate().for_each(|(i, val)| {
+    simulation_outputs.iter().enumerate().for_each(|(i, val)| {
         // attention: TRNSYS/Fortran is 1-indexed
-        set_output_value(i as i32 + 1, val.value);
+        set_output_value(i as i32, val.value);
     });
-}
 
-fn read_parameters(state: &mut TrnSysState) {
-    let num_params = get_number_of_parameters();
-    state.params = (1..num_params + 1)
-        .map(|i| TrnsysValue {
-            value: get_parameter_value(i),
-        })
-        .collect();
-    let num_inputs = get_number_of_inputs();
-    state.inputs = (1..num_inputs + 1)
-        .map(|i| TrnsysValue {
-            value: get_input_value(i),
-        })
-        .collect();
-    let num_outputs = get_number_of_outputs();
-    state.outputs = (1..num_outputs + 1)
-        .map(|i| TrnsysValue {
-            value: get_output_value(i),
-        })
-        .collect();
+    Ok(())
 }
-
-// fn read_storage(
-//     state: &mut TrnSysState
-// ) {
-//     let num_static_store: i32 = state.num_stored_variables.0;
-//     let num_dynamic_store: i32 = state.num_stored_variables.1;
-//
-//     state.static_store = (1..num_static_store + 1)
-//         .map(|i| TrnsysValue {
-//             value: get_static_array_value(i)
-//         })
-//         .collect();
-//
-//     state.variable_store = (1..num_dynamic_store + 1)
-//         .map(|i| TrnsysValue {
-//             value: get_dynamic_array_value_last_timestep(i)
-//         })
-//         .collect();
-// }

@@ -1,104 +1,105 @@
 use crate::storage::StoreProvider;
+use crate::trnsys::error::{InputError, TrnSysError};
 use crate::trnsys::iteration_mode::IterationMode;
-use crate::trnsys::param::TrnsysValue;
+use crate::trnsys::param::TrnSysValue;
 use crate::trnsys::*;
+use tracing::{info, warn};
 
-pub struct TrnSysState<D = (), S = ()> {
-    pub(crate) trnsys_standard_version: i32,
-    pub(crate) num_params: i32,
-    pub(crate) params: Vec<TrnsysValue>,
-    pub(crate) num_inputs: i32,
-    pub(crate) inputs: Vec<TrnsysValue>,
-    pub(crate) num_derivatives: i32,
-    pub(crate) num_outputs: i32,
-    pub(crate) default_output_values: Vec<TrnsysValue>,
-    pub(crate) outputs: Vec<TrnsysValue>,
-    pub(crate) iteration_mode: IterationMode,
-    /// The number of stored variables （static, dynamic）
-    // pub(crate) num_stored_variables: (i32, i32),
-    // pub(crate) static_store: Vec<TrnsysValue>,
-    // pub(crate) variable_store: Vec<TrnsysValue>,
-    pub(crate) dynamic_store: Option<Box<dyn StoreProvider<D>>>,
-    pub(crate) static_store: Option<Box<dyn StoreProvider<S>>>,
-}
-
-impl TrnSysState {
+pub(crate) struct TrnSysType {}
+impl TrnSysType {
     /// set up parameters for the TRNSYS type
     pub fn new() -> Self {
-        TrnSysState {
-            trnsys_standard_version: 17,
-            iteration_mode: IterationMode::default(),
-
-            num_params: 0,
-            params: vec![],
-
-            num_inputs: 0,
-            inputs: vec![],
-
-            num_derivatives: 0,
-
-            num_outputs: 0,
-            outputs: vec![],
-            default_output_values: vec![],
-
-            // num_stored_variables: (0, 0),
-            // TODO: Use storage if you need to read states from last iteration/time step
-            static_store: None,
-            dynamic_store: None,
-        }
+        TrnSysType {}
     }
 
     /// The very first call of the simulation.
-    /// At this time, **no parameters, inputs, or outputs are available**.
-    pub fn first_call_of_simulation(&self) {
+    /// At this time, **only the number of parameters, inputs, or outputs are available**.
+    /// You can change the number of parameters, inputs, or outputs at this time.
+    /// If inconsistent, error will be automatically raised.
+    pub fn first_call_of_simulation(&self, state: &mut TrnSysState) -> Result<(), TrnSysError> {
         // All the "Very First Call of the Simulation Manipulations"
+        // TODO: Set the number of parameters, inputs, outputs, and derivatives
+        state.num_inputs = 1;
+        state.num_params = 1;
+        state.num_derivatives = 0;
+        state.num_outputs = 1;
+        Ok(())
     }
 
     /// Validate the input parameters.
-    /// If not valid, call `found_bad_input` or `found_bad_parameter` to stop the simulation.
-    ///
-    /// You can still change the number of inputs or outputs at this time.
-    /// Later changes will not take effect.
-    pub fn validate_parameters(&self) {
+    /// If not valid, raise `InputError::BadInput` or `InputError::BadParameter` to stop the simulation.
+    pub fn validate_parameters(&self, state: &mut TrnSysState) -> Result<(), InputError> {
         // Validate the parameters
+        let param0: i32 = state
+            .params
+            .get(0)
+            .ok_or(InputError::BadParameter {
+                index: 0,
+                message: "Parameter 1 is missing".to_string(),
+            })?
+            .try_into()
+            .map_err(|e| InputError::BadParameter {
+                index: 0,
+                message: format!("{:?}", e),
+            })?;
+
+        info!("Parameter 0: {}", param0);
+        if param0 <= 0 {
+            warn!("Parameter 0 is less than or equal to 0");
+            return Err(InputError::BadParameter {
+                index: 0,
+                message: "Parameter 1 must be greater than 0".to_string(),
+            });
+        }
+
+        Ok(())
     }
     /// This function is called at the beginning of each simulation.
     /// Do start calculations here and store the results in the static store
-    pub fn simulation_starts(&self) {}
+    pub fn simulation_starts(&self, state: &mut TrnSysState) -> Result<(), TrnSysError> {
+        info!("Simulation Starts");
+        Ok(())
+    }
 
     /// Whether the simulation ends correctly or ends in error, each Type is recalled by the TRNSYS
     /// kernel before the simulation shuts down.
-    pub fn simulation_ends(&self) {
+    pub fn simulation_ends(&self, state: &mut TrnSysState) -> Result<(), TrnSysError> {
         // Do All of the Last Call Manipulations Here
+        info!("Simulation Ends");
+        Ok(())
     }
 
     /// The TRNSYS kernel calls this function at each time step. \
     /// This function will be called one or more times at each time step. \
     /// This function should return the values of the outputs for the current time step. \
     /// TrnSys will take care of the convergence of the simulation.
-    pub fn iterate(&mut self) -> Vec<TrnsysValue> {
+    pub fn iterate(&self, state: &mut TrnSysState) -> Result<Vec<TrnSysValue>, TrnSysError> {
         let time = get_simulation_time();
         let timestep = get_simulation_time_step();
         let current_unit = get_current_unit();
         let current_type = get_current_type();
+        let first: f64 = state.inputs.get(0).unwrap().into();
+        let param0: i32 = state.params.get(0).unwrap().try_into()?;
 
-        vec![]
+        Ok(vec![(first * param0 as f64).into()])
     }
 
     /// At the end of each time step, each Type in a simulation is recalled.
     /// If necessary, store the values of the outputs for the current time step
     /// in the dynamic storage
-    pub fn end_of_timestep(&self) {
+    pub fn end_of_timestep(&self, state: &mut TrnSysState) -> Result<(), TrnSysError> {
         // Perform Any "End of Timestep" Manipulations That May Be Required
+        Ok(())
     }
-    pub fn initialize_outputs(&self) {
+
+    pub fn get_default_output_values(
+        &self,
+        state: &mut TrnSysState,
+    ) -> Result<Vec<TrnSysValue>, TrnSysError> {
         // initialize output values
-        self.default_output_values
-            .iter()
-            .enumerate()
-            .for_each(|(i, val)| {
-                // attention: TRNSYS/Fortran is 1-indexed
-                set_output_value(i as i32 + 1, val.value);
-            });
+        let default_outputs = (1..(state.num_outputs + 1))
+            .map(|i| TrnSysValue { value: 0. })
+            .collect();
+        Ok(default_outputs)
     }
 }

@@ -19,14 +19,15 @@ fn read_toml_trnsys_metadata() -> toml::Value {
 }
 
 fn write_entrance_code(type_number: &str) {
-    // 获取构建输出目录
+    // Get Output Dir
     let out_dir = env::var("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir).join("generated_entrance.rs");
 
-    // 创建包含动态函数名称的代码
+    // Dynamic generate the type entrance
     let function_code = format!(
         r#"
         #[allow(non_snake_case)]
+        #[no_mangle]
         pub extern "C" fn TYPE{}() {{
             entrance();
         }}
@@ -34,7 +35,7 @@ fn write_entrance_code(type_number: &str) {
         type_number
     );
 
-    // 将生成的代码写入文件
+    // Write code to the file
     fs::write(&dest_path, function_code).unwrap();
 }
 fn main() {

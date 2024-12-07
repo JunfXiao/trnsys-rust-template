@@ -1,61 +1,68 @@
-use std::panic::catch_unwind;
+use crate::trnsys::error::TrnSysError;
 use crate::trnsys::get_lu_filename;
+use std::panic::catch_unwind;
 
-pub struct TrnsysValue {
+pub struct TrnSysValue {
     pub value: f64,
 }
 
-impl TrnsysValue {
+impl TrnSysValue {
     pub fn new(value: f64) -> Self {
-        TrnsysValue { value }
+        TrnSysValue { value }
     }
-
-
 }
 
-impl From<f64> for TrnsysValue {
+impl From<f64> for TrnSysValue {
     fn from(value: f64) -> Self {
-        TrnsysValue { value }
+        TrnSysValue { value }
     }
 }
 
-impl  From<i32> for TrnsysValue {
+impl From<i32> for TrnSysValue {
     fn from(value: i32) -> Self {
-        TrnsysValue { value: value as f64 }
+        TrnSysValue {
+            value: value as f64,
+        }
     }
 }
 
-
-
-impl From<TrnsysValue> for f64 {
-    fn from(param: TrnsysValue) -> Self {
+impl From<&TrnSysValue> for f64 {
+    fn from(param: &TrnSysValue) -> Self {
         param.value
     }
 }
 
-impl From<TrnsysValue> for i32 {
-    fn from(param: TrnsysValue) -> Self {
-        // float to int conversion
-        param.value as i32
+impl TryFrom<&TrnSysValue> for i32 {
+    type Error = TrnSysError;
+    fn try_from(value: &TrnSysValue) -> Result<Self, Self::Error> {
+        if value.value.is_nan() {
+            Err(TrnSysError::ConversionError {
+                param: "TrnSysValue".to_string(),
+                message: "Cannot convert NaN to i32".to_string(),
+            })
+        } else if value.value.fract() != 0.0 {
+            Err(TrnSysError::ConversionError {
+                param: "TrnSysValue".to_string(),
+                message: "Cannot convert float to i32".to_string(),
+            })
+        } else {
+            Ok(value.value as i32)
+        }
     }
 }
 
-
-impl TryFrom<TrnsysValue> for String {
+impl TryFrom<&TrnSysValue> for String {
     type Error = String;
 
-    fn try_from(param: TrnsysValue) -> Result<Self, Self::Error> {
+    fn try_from(param: &TrnSysValue) -> Result<Self, Self::Error> {
         // try to convert the float to the string
         // by reading the logical unit of the file from value
         let logical_unit = (param.value + 0.1) as i32;
-        let fname = catch_unwind(||{
-            get_lu_filename(logical_unit)
-        });
+        let fname = catch_unwind(|| get_lu_filename(logical_unit));
 
         match fname {
             Ok(name) => Ok(name),
-            Err(e) =>
-                match e.downcast::<String>() {
+            Err(e) => match e.downcast::<String>() {
                 Ok(panic_msg) => {
                     let panic_msg = format!("Cannot read param as string:{}", panic_msg);
                     println!("{}", &panic_msg);
@@ -66,7 +73,7 @@ impl TryFrom<TrnsysValue> for String {
                     println!("{}", &panic_msg);
                     Err(panic_msg.to_string())
                 }
-            }
+            },
         }
     }
 }

@@ -31,7 +31,7 @@ where
     }
 
     fn set_dyn(&mut self, value: Option<T>) {
-        let mut ref_value = self
+        let ref_value = self
             .history
             .last_mut()
             .expect("No history found. Please report this bug.");

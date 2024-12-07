@@ -1,8 +1,5 @@
 #![allow(unused)]
 
-use std::ffi::{CStr, CString};
-use std::os::raw::{c_char, c_double};
-
 pub use ext_c::FLUID_PROPERTIES as fluid_properties;
 pub use ext_c::GETHORIZONTALRADIATION as get_horizontal_radiation;
 pub use ext_c::GETTILTEDRADIATION as get_tilted_radiation;
@@ -11,12 +8,20 @@ pub use ext_c::MESSAGES as messages;
 pub use ext_c::MOISTAIRPROPERTIES as moist_air_properties;
 pub use ext_c::SOLVEDIFFEQ as solve_diff_eq;
 pub use ext_c::STEAM_PROPERTIES as steam_properties;
+use std::ffi::{CStr, CString};
+use std::os::raw::{c_char, c_double, c_int};
+use tracing::info;
 use util::c_bool;
 
+pub mod error;
 mod ext_c;
 pub(super) mod iteration_mode;
+pub mod logging;
 pub(super) mod param;
+mod state;
 mod util;
+
+pub use state::*;
 
 // This file declares all the global functions available to C / C++ TRNSYS Types
 
@@ -24,46 +29,88 @@ pub(crate) enum Severity {
     Notice,
     Warning,
     Fatal,
+    Stop,
 }
 
 impl Severity {
     fn as_cstring(&self) -> CString {
         match self {
             Severity::Notice => CString::new("notice").unwrap(),
-            Severity::Warning => CString::new("warning").unwrap(),
-            Severity::Fatal => CString::new("fatal").unwrap(),
+            Severity::Warning => CString::new("Warning").unwrap(),
+            Severity::Fatal => CString::new("FATAL").unwrap(),
+            Severity::Stop => CString::new("STOP").unwrap(),
         }
     }
 }
 
-pub fn found_bad_input(input: &mut i32, severity: Severity, message: &str) {
+/// Reports a bad input to the TRNSYS engine.
+///
+/// # Arguments
+///
+/// * `input` - A mutable reference to the input index (0-indexed).
+/// * `severity` - The severity of the error.
+/// * `message` - A message describing the error.
+///
+/// # Safety
+///
+/// This function uses unsafe code to interact with the TRNSYS engine.
+pub fn found_bad_input(mut input: i32, severity: Severity, message: &str) {
     unsafe {
+        input += 1;
         let severity = severity.as_cstring();
         let message = CString::new(message).unwrap();
         ext_c::FOUNDBADINPUT(
-            input,
-            severity.clone().into_raw(),
-            message.clone().into_raw(),
-            severity.as_bytes().len(),
-            message.as_bytes().len(),
+            input as *mut c_int,
+            severity.as_ptr() as *mut c_char,
+            message.as_ptr() as *mut c_char,
+            severity.as_bytes_with_nul().len(),
+            message.as_bytes_with_nul().len(),
         );
     }
 }
 
-pub fn found_bad_parameter(param: &mut i32, severity: Severity, message: &str) {
+/// Reports a bad parameter to the TRNSYS engine.
+///
+/// # Arguments
+///
+/// * `param` - A mutable reference to the parameter index (0-indexed).
+/// * `severity` - The severity of the error.
+/// * `message` - A message describing the error.
+///
+/// # Safety
+///
+/// This function uses unsafe code to interact with the TRNSYS engine.
+pub fn found_bad_parameter(mut param: i32, severity: Severity, message: &str) {
+    info!("Found bad parameter");
     unsafe {
+        param += 1;
+
+        let mut param: c_int = param;
         let severity = severity.as_cstring();
+
+        let severity_ptr = severity.as_ptr() as *mut c_char;
+        let severity_len = severity.as_bytes_with_nul().len();
+
+        let message = CString::new(message).expect("Failed to create CString");
+
+        let message_ptr = message.as_ptr() as *mut c_char;
+        let message_len = message.as_bytes_with_nul().len();
+
+        info!(
+            "Param ptr: {:p}, Severity ptr: {:p}, Message ptr: {:p}",
+            &mut param as *mut c_int, severity_ptr, message_ptr
+        );
+
         let message = CString::new(message).unwrap();
         ext_c::FOUNDBADPARAMETER(
-            param,
-            severity.clone().into_raw(),
-            message.clone().into_raw(),
-            severity.as_bytes().len(),
-            message.as_bytes().len(),
+            &mut param as *mut c_int,
+            severity_ptr,
+            message_ptr,
+            severity_len,
+            message_len,
         );
     }
 }
-
 pub fn init_report_integral(index: &mut i32, int_name: &str, inst_unit: &str, int_unit: &str) {
     unsafe {
         let cstr_int_name = CString::new(int_name).unwrap();
@@ -74,9 +121,9 @@ pub fn init_report_integral(index: &mut i32, int_name: &str, inst_unit: &str, in
             cstr_int_name.as_ptr() as *mut c_char,
             cstr_inst_unit.as_ptr() as *mut c_char,
             cstr_int_unit.as_ptr() as *mut c_char,
-            int_name.len(),
-            inst_unit.len(),
-            int_unit.len(),
+            cstr_int_name.as_bytes_with_nul().len(),
+            cstr_inst_unit.as_bytes_with_nul().len(),
+            cstr_int_unit.as_bytes_with_nul().len(),
         );
     }
 }
@@ -89,8 +136,8 @@ pub fn init_report_min_max(index: &mut i32, minmax_name: &str, minmax_unit: &str
             index,
             cstr_minmax_name.as_ptr() as *mut c_char,
             cstr_minmax_unit.as_ptr() as *mut c_char,
-            minmax_name.len(),
-            minmax_unit.len(),
+            cstr_minmax_name.as_bytes_with_nul().len(),
+            cstr_minmax_unit.as_bytes_with_nul().len(),
         );
     }
 }
@@ -103,8 +150,8 @@ pub fn init_report_text(index: &mut i32, txt_name: &str, txt_val: &str) {
             index,
             cstr_txt_name.as_ptr() as *mut c_char,
             cstr_txt_val.as_ptr() as *mut c_char,
-            txt_name.len(),
-            txt_val.len(),
+            cstr_txt_name.as_bytes_with_nul().len(),
+            cstr_txt_val.as_bytes_with_nul().len(),
         );
     }
 }
@@ -142,6 +189,7 @@ pub fn set_dynamic_array_value_this_iteration(mut i: i32, mut value: f64) {
 }
 
 pub fn set_input_units(mut i: i32, string: &str) {
+    i += 1;
     unsafe {
         let cstr = CString::new(string).unwrap();
         ext_c::SETINPUTUNITS(&mut i, cstr.as_ptr() as *mut c_char, string.len());
@@ -199,6 +247,7 @@ pub fn set_output_units(mut i: i32, string: &str) {
 }
 
 pub fn set_output_value(mut i: i32, mut value: f64) {
+    i += 1;
     unsafe { ext_c::SETOUTPUTVALUE(&mut i, &mut value) }
 }
 
@@ -408,4 +457,38 @@ pub fn update_report_integral(index: &mut i32, int_val: &mut f64) {
 
 pub fn update_report_min_max(index: &mut i32, new_val: &mut f64) {
     unsafe { ext_c::UPDATEREPORTMINMAX(index, new_val) }
+}
+
+pub fn log_message(severity: Severity, error_code: i32, message: &str) {
+    let severity = severity.as_cstring();
+    let message = std::ffi::CString::new(message).expect("CString::new failed");
+
+    // 确保局部变量是mut的，然后通过指针传递
+    let mut error_code = if (error_code < 1000 && error_code > 0) {
+        error_code + 1000
+    } else {
+        error_code
+    };
+
+    let mut unit_no = get_current_unit();
+    let mut type_no = get_current_type();
+
+    let msg_len = message.as_bytes().len();
+    let sev_len = severity.as_bytes().len();
+
+    unsafe {
+        ext_c::MESSAGES(
+            &mut error_code as *mut c_int,
+            message.as_ptr() as *mut c_char,
+            severity.as_ptr() as *mut c_char,
+            &mut unit_no as *mut c_int,
+            &mut type_no as *mut c_int,
+            msg_len,
+            sev_len,
+        );
+    }
+}
+
+pub fn simulation_has_error() -> bool {
+    unsafe { c_bool(ext_c::TRNSYSFUNCTIONS_mp_ERRORFOUND()) }
 }
