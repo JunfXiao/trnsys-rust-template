@@ -63,8 +63,8 @@ pub fn found_bad_input(mut input: i32, severity: Severity, message: &str) {
             input as *mut c_int,
             severity.as_ptr() as *mut c_char,
             message.as_ptr() as *mut c_char,
-            severity.as_bytes_with_nul().len(),
-            message.as_bytes_with_nul().len(),
+            severity.as_bytes().len(),
+            message.as_bytes().len(),
         );
     }
 }
@@ -89,12 +89,12 @@ pub fn found_bad_parameter(mut param: i32, severity: Severity, message: &str) {
         let severity = severity.as_cstring();
 
         let severity_ptr = severity.as_ptr() as *mut c_char;
-        let severity_len = severity.as_bytes_with_nul().len();
+        let severity_len = severity.as_bytes().len();
 
         let message = CString::new(message).expect("Failed to create CString");
 
         let message_ptr = message.as_ptr() as *mut c_char;
-        let message_len = message.as_bytes_with_nul().len();
+        let message_len = message.as_bytes().len();
 
         info!(
             "Param ptr: {:p}, Severity ptr: {:p}, Message ptr: {:p}",
@@ -121,9 +121,9 @@ pub fn init_report_integral(index: &mut i32, int_name: &str, inst_unit: &str, in
             cstr_int_name.as_ptr() as *mut c_char,
             cstr_inst_unit.as_ptr() as *mut c_char,
             cstr_int_unit.as_ptr() as *mut c_char,
-            cstr_int_name.as_bytes_with_nul().len(),
-            cstr_inst_unit.as_bytes_with_nul().len(),
-            cstr_int_unit.as_bytes_with_nul().len(),
+            cstr_int_name.as_bytes().len(),
+            cstr_inst_unit.as_bytes().len(),
+            cstr_int_unit.as_bytes().len(),
         );
     }
 }
@@ -136,8 +136,8 @@ pub fn init_report_min_max(index: &mut i32, minmax_name: &str, minmax_unit: &str
             index,
             cstr_minmax_name.as_ptr() as *mut c_char,
             cstr_minmax_unit.as_ptr() as *mut c_char,
-            cstr_minmax_name.as_bytes_with_nul().len(),
-            cstr_minmax_unit.as_bytes_with_nul().len(),
+            cstr_minmax_name.as_bytes().len(),
+            cstr_minmax_unit.as_bytes().len(),
         );
     }
 }
@@ -150,8 +150,8 @@ pub fn init_report_text(index: &mut i32, txt_name: &str, txt_val: &str) {
             index,
             cstr_txt_name.as_ptr() as *mut c_char,
             cstr_txt_val.as_ptr() as *mut c_char,
-            cstr_txt_name.as_bytes_with_nul().len(),
-            cstr_txt_val.as_bytes_with_nul().len(),
+            cstr_txt_name.as_bytes().len(),
+            cstr_txt_val.as_bytes().len(),
         );
     }
 }
