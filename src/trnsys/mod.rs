@@ -386,12 +386,8 @@ pub fn get_number_of_inputs() -> i32 {
     unsafe { ext_c::TRNSYSFUNCTIONS_mp_GETNUMBEROFINPUTS() }
 }
 
-pub fn get_number_of_labels() -> i32 {
-    let mut i = 0;
-    unsafe {
-        ext_c::TRNSYSFUNCTIONS_mp_GETNUMBEROFLABELS(&mut i);
-    }
-    i
+pub fn get_number_of_labels(mut unit_number: i32) -> i32 {
+    unsafe { ext_c::TRNSYSFUNCTIONS_mp_GETNUMBEROFLABELS(&mut unit_number as *mut c_int) }
 }
 
 pub fn get_number_of_outputs() -> i32 {
