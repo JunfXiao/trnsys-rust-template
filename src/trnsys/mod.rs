@@ -464,7 +464,7 @@ pub fn get_trnsys_root_dir() -> String {
     let mut buffer = Vec::<c_char>::with_capacity(get_max_path_length() as usize);
     unsafe {
         let ptr = ext_c::TRNSYSFUNCTIONS_mp_GETTRNSYSROOTDIR(
-            buffer.as_slice().as_mut_ptr(),
+            buffer.as_mut_slice().as_mut_ptr(),
             buffer.len(),
         );
         CStr::from_ptr(ptr).to_string_lossy().into_owned()
