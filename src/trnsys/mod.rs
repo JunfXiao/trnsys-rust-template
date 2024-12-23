@@ -336,10 +336,15 @@ pub fn is_version_signing_time() -> bool {
     unsafe { c_bool(ext_c::TRNSYSFUNCTIONS_mp_GETISVERSIONSIGNINGTIME()) }
 }
 
-pub fn get_label(iunit: &mut i32, no: &mut i32) -> String {
+pub fn get_label(mut iunit: i32, mut no: i32) -> String {
     let mut buffer = [0 as c_char; 256];
     unsafe {
-        let ptr = ext_c::TRNSYSFUNCTIONS_mp_GETLABEL(buffer.as_mut_ptr(), buffer.len(), iunit, no);
+        let ptr = ext_c::TRNSYSFUNCTIONS_mp_GETLABEL(
+            buffer.as_mut_ptr(),
+            buffer.len(),
+            &mut iunit as *mut c_int,
+            &mut no as *mut c_int,
+        );
         CStr::from_ptr(ptr).to_string_lossy().into_owned()
     }
 }
@@ -383,7 +388,10 @@ pub fn get_number_of_inputs() -> i32 {
 
 pub fn get_number_of_labels() -> i32 {
     let mut i = 0;
-    unsafe { ext_c::TRNSYSFUNCTIONS_mp_GETNUMBEROFLABELS(&mut i) }
+    unsafe {
+        ext_c::TRNSYSFUNCTIONS_mp_GETNUMBEROFLABELS(&mut i);
+    }
+    i
 }
 
 pub fn get_number_of_outputs() -> i32 {
