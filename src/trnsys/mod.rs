@@ -276,9 +276,12 @@ pub fn get_current_unit() -> i32 {
 }
 
 pub fn get_deck_filename() -> String {
-    let mut buffer = [0 as c_char; 256];
+    let mut buffer = Vec::<c_char>::with_capacity(get_max_path_length() as usize);
     unsafe {
-        let ptr = ext_c::TRNSYSFUNCTIONS_mp_GETDECKFILENAME(buffer.as_mut_ptr(), buffer.len());
+        let ptr = ext_c::TRNSYSFUNCTIONS_mp_GETDECKFILENAME(
+            buffer.as_mut_slice().as_mut_ptr(),
+            buffer.len(),
+        );
         CStr::from_ptr(ptr).to_string_lossy().into_owned()
     }
 }
@@ -291,13 +294,18 @@ pub fn get_format(label: &mut [u8], iunit: &mut i32, no: &mut i32) -> String {
     if label.len() > 256 {
         panic!("The label length must be less than 256 bytes");
     }
-    let mut buffer = [0 as c_char; 256];
+    let mut buffer = Vec::<c_char>::with_capacity(get_max_path_length() as usize);
     // write the label to the buffer
     for (i, &byte) in label.iter().enumerate() {
         buffer[i] = byte as c_char;
     }
     unsafe {
-        let ptr = ext_c::TRNSYSFUNCTIONS_mp_GETFORMAT(buffer.as_mut_ptr(), buffer.len(), iunit, no);
+        let ptr = ext_c::TRNSYSFUNCTIONS_mp_GETFORMAT(
+            buffer.as_mut_slice().as_mut_ptr(),
+            buffer.len(),
+            iunit,
+            no,
+        );
         CStr::from_ptr(ptr).to_string_lossy().into_owned()
     }
 }
@@ -337,11 +345,11 @@ pub fn is_version_signing_time() -> bool {
 }
 
 pub fn get_label(mut iunit: i32, mut no: i32) -> String {
-    let mut buffer = [0 as c_char; 256];
+    let mut buffer = Vec::<c_char>::with_capacity(get_max_label_length() as usize);
     unsafe {
         let ptr = ext_c::TRNSYSFUNCTIONS_mp_GETLABEL(
-            buffer.as_mut_ptr(),
-            buffer.len(),
+            buffer.as_mut_slice().as_mut_ptr(),
+            buffer.capacity(),
             &mut iunit as *mut c_int,
             &mut no as *mut c_int,
         );
@@ -350,10 +358,13 @@ pub fn get_label(mut iunit: i32, mut no: i32) -> String {
 }
 
 pub fn get_lu_filename(mut lu: i32) -> String {
-    let mut buffer = [0 as c_char; 256];
+    let mut buffer = Vec::<c_char>::with_capacity(get_max_path_length() as usize);
     unsafe {
-        let ptr =
-            ext_c::TRNSYSFUNCTIONS_mp_GETLUFILENAME(buffer.as_mut_ptr(), buffer.len(), &mut lu);
+        let ptr = ext_c::TRNSYSFUNCTIONS_mp_GETLUFILENAME(
+            buffer.as_mut_slice().as_mut_ptr(),
+            buffer.len(),
+            &mut lu,
+        );
         CStr::from_ptr(ptr).to_string_lossy().into_owned()
     }
 }
@@ -439,18 +450,23 @@ pub fn get_timestep_iteration() -> i32 {
 }
 
 pub fn get_trnsys_input_file_dir() -> String {
-    let mut buffer = [0 as c_char; 256];
+    let mut buffer = Vec::<c_char>::with_capacity(get_max_path_length() as usize);
     unsafe {
-        let ptr =
-            ext_c::TRNSYSFUNCTIONS_mp_GETTRNSYSINPUTFILEDIR(buffer.as_mut_ptr(), buffer.len());
+        let ptr = ext_c::TRNSYSFUNCTIONS_mp_GETTRNSYSINPUTFILEDIR(
+            buffer.as_mut_slice().as_mut_ptr(),
+            buffer.len(),
+        );
         CStr::from_ptr(ptr).to_string_lossy().into_owned()
     }
 }
 
 pub fn get_trnsys_root_dir() -> String {
-    let mut buffer = [0 as c_char; 256];
+    let mut buffer = Vec::<c_char>::with_capacity(get_max_path_length() as usize);
     unsafe {
-        let ptr = ext_c::TRNSYSFUNCTIONS_mp_GETTRNSYSROOTDIR(buffer.as_mut_ptr(), buffer.len());
+        let ptr = ext_c::TRNSYSFUNCTIONS_mp_GETTRNSYSROOTDIR(
+            buffer.as_slice().as_mut_ptr(),
+            buffer.len(),
+        );
         CStr::from_ptr(ptr).to_string_lossy().into_owned()
     }
 }
