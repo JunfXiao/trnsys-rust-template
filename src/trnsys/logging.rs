@@ -217,8 +217,8 @@ pub fn init_tracing(file_name: Option<String>) {
     // Combine layers
     let subscriber = Registry::default()
         .with(filter)
-        .with(fmt_layer)
-        .with(trnsys_log_layer);
+        .with(trnsys_log_layer)
+        .with(fmt_layer);
 
     // Global initialization
     tracing::subscriber::set_global_default(subscriber)
@@ -232,14 +232,24 @@ pub fn init_tracing(file_name: Option<String>) {
 
 /// Cleans up the tracing system.
 /// Removes the log file if it exists.
-/// If any error stops the simulation, the log file will not be removed.
+/// If any error stops the simulation, the log file will be moved to simulation folder instead.
 pub fn cleanup_tracing() {
-    if simulation_has_error() {
-        return;
-    }
     let mut log_file_path = LOGFILE_PATH.lock().unwrap();
-    if let Some(file_name) = log_file_path.as_ref() {
-        std::fs::remove_file(file_name).expect("Failed to remove log file");
+
+    if let Some(file_path) = log_file_path.as_ref() {
+        if simulation_has_error() {
+            std::fs::remove_file(file_path).expect("Failed to remove log file");
+        } else {
+            // Move the log file to the current working directory
+            let new_file_path = std::env::current_dir()
+                .expect("Failed to get current directory")
+                .join("type_error.log");
+            // remove if the file already exists
+            if new_file_path.exists() {
+                std::fs::remove_file(&new_file_path).expect("Failed to remove existing log file");
+            }
+            std::fs::rename(file_path, new_file_path).expect("Failed to move log file");
+        }
         *log_file_path = None;
     }
 }
