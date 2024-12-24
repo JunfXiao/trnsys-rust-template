@@ -109,7 +109,7 @@ impl<S: Subscriber> Layer<S> for TrnSysLogLayer {
     /// * `_ctx` - The context of the subscriber.
     fn on_event(&self, event: &Event<'_>, _ctx: tracing_subscriber::layer::Context<'_, S>) {
         let metadata = event.metadata();
-        if metadata.level() >= &self.threshold {
+        if metadata.level() <= &self.threshold {
             let mut str = String::new();
             let mut writer = tracing_subscriber::fmt::format::Writer::new(&mut str);
 
