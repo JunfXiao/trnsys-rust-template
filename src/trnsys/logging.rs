@@ -238,17 +238,26 @@ pub fn cleanup_tracing() {
 
     if let Some(file_path) = log_file_path.as_ref() {
         if simulation_has_error() {
-            std::fs::remove_file(file_path).expect("Failed to remove log file");
-        } else {
             // Move the log file to the current working directory
             let new_file_path = std::env::current_dir()
                 .expect("Failed to get current directory")
                 .join("type_error.log");
+            let new_file_path_str = new_file_path.clone().to_str().unwrap().to_owned();
             // remove if the file already exists
             if new_file_path.exists() {
                 std::fs::remove_file(&new_file_path).expect("Failed to remove existing log file");
             }
             std::fs::rename(file_path, new_file_path).expect("Failed to move log file");
+            log_in_trnsys(
+                Level::INFO,
+                None,
+                &format!(
+                    "Simulation stopped due to error. Log file moved to current directory: {}",
+                    new_file_path_str
+                ),
+            );
+        } else {
+            std::fs::remove_file(file_path).expect("Failed to remove log file");
         }
         *log_file_path = None;
     }
