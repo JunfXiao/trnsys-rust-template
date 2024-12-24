@@ -247,7 +247,7 @@ pub fn cleanup_tracing() {
             if new_file_path.exists() {
                 std::fs::remove_file(&new_file_path).expect("Failed to remove existing log file");
             }
-            std::fs::rename(file_path, new_file_path).expect("Failed to move log file");
+            std::fs::copy(file_path, &new_file_path).expect("Failed to move log file");
             log_in_trnsys(
                 Level::INFO,
                 None,
@@ -256,9 +256,10 @@ pub fn cleanup_tracing() {
                     new_file_path_str
                 ),
             );
-        } else {
-            std::fs::remove_file(file_path).expect("Failed to remove log file");
         }
+
+        std::fs::remove_file(file_path).expect("Failed to remove log file");
+
         *log_file_path = None;
     }
 }
