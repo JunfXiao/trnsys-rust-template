@@ -226,7 +226,8 @@ pub fn init_tracing(file_name: Option<String>) {
 
     // panic hook
     std::panic::set_hook(Box::new(|panic_info| {
-        error!("TrnSys Type Panicked: {}", panic_info);
+        error!("TrnSys Type Panicked: {:#}", panic_info);
+        cleanup_tracing();
     }));
 }
 
