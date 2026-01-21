@@ -1,10 +1,12 @@
 use crate::trnsys::{get_current_unit, log_message, messages, simulation_has_error, Severity};
-use std::backtrace;
+use crate::TYPE_NUMBER;
 use std::fmt::{Debug, Formatter, Pointer};
 use std::fs::OpenOptions;
 use std::io::{Cursor, Write};
+use std::path::PathBuf;
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::{backtrace, env};
 use tracing::field::{Field, Visit};
 use tracing::{error, Event, Level, Subscriber};
 use tracing_subscriber::filter::EnvFilter;
@@ -136,20 +138,17 @@ impl<S: Subscriber> Layer<S> for TrnSysLogLayer {
 /// Returns the default log file name.
 /// Usually it is a file under temp directory,
 /// with a name like "trnsys_{Timestamp}.log".
-pub fn get_default_log_file() -> String {
+pub fn get_log_filename() -> String {
     let timestamp = SystemTime::now();
 
     let file_name = format!(
-        "trnsys_{}.log",
+        "trnsys_T{}_U{}_{}.log",
+        TYPE_NUMBER,
+        get_current_unit(),
         timestamp.duration_since(UNIX_EPOCH).unwrap().as_secs()
     );
 
-    let temp_dir = std::env::temp_dir();
-    temp_dir
-        .join(file_name)
-        .to_str()
-        .expect("Failed to get log file name")
-        .to_string()
+    file_name
 }
 
 struct UnitNoFmt<F>(F);
@@ -174,7 +173,7 @@ where
     }
 }
 
-static LOGFILE_PATH: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
+static LOGFILE_PATH: LazyLock<Mutex<Option<PathBuf>>> = LazyLock::new(|| Mutex::new(None));
 
 /// Initializes tracing with custom layers and settings.
 ///
@@ -182,17 +181,17 @@ static LOGFILE_PATH: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::n
 ///
 /// * `file_name` - The name of the log file to write to.
 pub fn init_tracing(file_name: Option<String>) {
-    let file_name = file_name.unwrap_or(get_default_log_file());
+    let file_name = file_name.unwrap_or(get_log_filename());
 
     // Store the log file path for later use
     let mut log_file_path = LOGFILE_PATH.lock().unwrap();
-    *log_file_path = Some(file_name.clone());
+    *log_file_path = Some(env::temp_dir().join(file_name));
 
     // Open (or create) the log file
     let log_file = OpenOptions::new()
         .create(true)
         .append(true)
-        .open(file_name)
+        .open(log_file_path.as_ref().unwrap())
         .expect("Failed to open log file");
 
     // Wrap the writer with a Mutex to ensure thread-safe writing
@@ -242,7 +241,7 @@ pub fn cleanup_tracing() {
             // Move the log file to the current working directory
             let new_file_path = std::env::current_dir()
                 .expect("Failed to get current directory")
-                .join("type_error.log");
+                .join(format!("error_{}", get_log_filename()));
             let new_file_path_str = new_file_path.clone().to_str().unwrap().to_owned();
             // remove if the file already exists
             if new_file_path.exists() {

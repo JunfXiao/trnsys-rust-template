@@ -26,13 +26,16 @@ fn write_entrance_code(type_number: &str) {
     // Dynamic generate the type entrance
     let function_code = format!(
         r#"
+
+        pub(crate) const TYPE_NUMBER: u32 = {type_number};
+
         #[allow(non_snake_case)]
         #[no_mangle]
-        pub extern "C" fn TYPE{}() {{
+        pub extern "C" fn TYPE{type_number}() {{
             entrance();
         }}
         "#,
-        type_number
+        type_number = type_number
     );
 
     // Write code to the file

@@ -2,13 +2,13 @@ use crate::logging::init_tracing;
 use crate::trnsys::error::{TrnSysError, TrnSysErrorHandler};
 use crate::trnsys::logging::cleanup_tracing;
 use crate::trnsys_type::TrnSysType;
+use anyhow::{Context, Error, Result};
 use std::collections::HashMap;
 use std::ops::DerefMut;
 use std::sync::{Arc, LazyLock, RwLock};
 use tracing::{debug, error, info};
 use trnsys::*;
 
-mod storage;
 mod trnsys;
 mod trnsys_type;
 
@@ -33,6 +33,10 @@ fn get_current_state() -> Arc<RwLock<TrnSysState>> {
 }
 
 fn entrance() {
+    // Disable FPU exceptions for Rust's SIMD Optimization
+    // Its padding can cause FPU Hardware Interrupts,
+    // which is captured by TRNSYS
+    let _guard = FpuGuard::new();
     let state_lock = get_current_state();
     let mut state = state_lock.write().unwrap();
     // create type instance
@@ -45,7 +49,7 @@ fn entrance() {
     }
 }
 
-fn main(mut state: &mut TrnSysState) -> Result<(), TrnSysError> {
+fn main(mut state: &mut TrnSysState) -> Result<()> {
     let type_instance = TRNSYS_TYPE_INSTANCE.clone();
 
     if is_version_signing_time() {

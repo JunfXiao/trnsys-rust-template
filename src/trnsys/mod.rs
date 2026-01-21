@@ -8,6 +8,7 @@ pub use ext_c::MESSAGES as messages;
 pub use ext_c::MOISTAIRPROPERTIES as moist_air_properties;
 pub use ext_c::SOLVEDIFFEQ as solve_diff_eq;
 pub use ext_c::STEAM_PROPERTIES as steam_properties;
+pub use fpu_guard::fpu_guard::FpuGuard;
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_double, c_int};
 use tracing::info;
@@ -15,6 +16,7 @@ use util::c_bool;
 
 pub mod error;
 mod ext_c;
+mod fpu_guard;
 pub(super) mod iteration_mode;
 pub mod logging;
 pub(super) mod param;
