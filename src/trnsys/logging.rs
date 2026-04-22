@@ -1,28 +1,28 @@
-use crate::trnsys::{get_current_unit, log_message, messages, simulation_has_error, Severity};
 use crate::TYPE_NUMBER;
+use crate::trnsys::{Severity, get_current_unit, get_simulation_time, log_message, messages, simulation_has_error};
+use std::backtrace;
 use std::fmt::{Debug, Formatter, Pointer};
 use std::fs::OpenOptions;
 use std::io::{Cursor, Write};
-use std::path::PathBuf;
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
-use std::{backtrace, env};
 use tracing::field::{Field, Visit};
-use tracing::{error, Event, Level, Subscriber};
+use tracing::{Event, Level, Subscriber, error};
 use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::writer::MakeWriterExt;
-use tracing_subscriber::fmt::{format, time, FormatEvent, FormatFields};
+use tracing_subscriber::fmt::{FormatEvent, FormatFields, format, time};
 use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::{
+    Layer,
     fmt::{self, time::OffsetTime, writer::BoxMakeWriter},
     layer::SubscriberExt,
     registry::Registry,
-    Layer,
 };
 
-/// The threshold level for trnsys logging.
-const TRNSYS_LOG_LEVEL: Level = Level::WARN;
+
+const TRNSYS_LOG_LEVEL: Level = Level::INFO;
+
 
 /// Custom function to handle trnsys logging.
 ///
@@ -135,20 +135,21 @@ impl<S: Subscriber> Layer<S> for TrnSysLogLayer {
     }
 }
 
-/// Returns the default log file name.
-/// Usually it is a file under temp directory,
-/// with a name like "trnsys_{Timestamp}.log".
-pub fn get_log_filename() -> String {
-    let timestamp = SystemTime::now();
+/// Returns the default log file name under the current directory.
+pub fn get_default_log_file() -> String {
 
     let file_name = format!(
-        "trnsys_T{}_U{}_{}.log",
+        "type_{}_{}.log",
         TYPE_NUMBER,
-        get_current_unit(),
-        timestamp.duration_since(UNIX_EPOCH).unwrap().as_secs()
+        get_current_unit()
     );
+    let cwd = std::env::current_dir().unwrap_or(std::env::temp_dir());
+    
+    cwd.join(file_name)
+        .to_str()
+        .expect("Failed to get log file name")
+        .to_string()
 
-    file_name
 }
 
 struct UnitNoFmt<F>(F);
@@ -165,7 +166,7 @@ where
         mut writer: Writer<'_>,
         event: &Event<'_>,
     ) -> std::fmt::Result {
-        write!(writer, "[Unit {}]", get_current_unit())?;
+        write!(writer, "[Unit {}] [T={}]", get_current_unit(), get_simulation_time())?;
 
         self.0.format_event(ctx, writer.by_ref(), event)?;
 
@@ -173,7 +174,11 @@ where
     }
 }
 
-static LOGFILE_PATH: LazyLock<Mutex<Option<PathBuf>>> = LazyLock::new(|| Mutex::new(None));
+static LOGFILE_PATH: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
+
+pub fn is_tracing_initialized() -> bool {
+    LOGFILE_PATH.try_lock().map(|l|l.is_some()).unwrap_or(true)
+}
 
 /// Initializes tracing with custom layers and settings.
 ///
@@ -181,17 +186,18 @@ static LOGFILE_PATH: LazyLock<Mutex<Option<PathBuf>>> = LazyLock::new(|| Mutex::
 ///
 /// * `file_name` - The name of the log file to write to.
 pub fn init_tracing(file_name: Option<String>) {
-    let file_name = file_name.unwrap_or(get_log_filename());
+    let file_name = file_name.unwrap_or(get_default_log_file());
 
     // Store the log file path for later use
     let mut log_file_path = LOGFILE_PATH.lock().unwrap();
-    *log_file_path = Some(env::temp_dir().join(file_name));
+    *log_file_path = Some(file_name.clone());
 
     // Open (or create) the log file
     let log_file = OpenOptions::new()
         .create(true)
-        .append(true)
-        .open(log_file_path.as_ref().unwrap())
+        .write(true)
+        .truncate(true)
+        .open(file_name)
         .expect("Failed to open log file");
 
     // Wrap the writer with a Mutex to ensure thread-safe writing
@@ -200,7 +206,10 @@ pub fn init_tracing(file_name: Option<String>) {
     let local_time = OffsetTime::local_rfc_3339().expect("Failed to get local time offset");
 
     // Set up the filter (can be controlled via the RUST_LOG environment variable)
-    let filter = EnvFilter::from_default_env().add_directive("info".parse().unwrap());
+    #[cfg(debug_assertions)]
+    let filter = EnvFilter::from_env("TRNSYS_ODBC_RS").add_directive("debug".parse().unwrap());
+    #[cfg(not(debug_assertions))]
+    let filter = EnvFilter::from_env("TRNSYS_ODBC_RS").add_directive("info".parse().unwrap());
 
     // Formatting Layer: output to both file and stdout
     let fmt_layer = fmt::layer()
@@ -226,40 +235,7 @@ pub fn init_tracing(file_name: Option<String>) {
     // panic hook
     std::panic::set_hook(Box::new(|panic_info| {
         error!("TrnSys Type Panicked: {:#}", panic_info);
-        cleanup_tracing();
+
     }));
 }
 
-/// Cleans up the tracing system.
-/// Removes the log file if it exists.
-/// If any error stops the simulation, the log file will be moved to simulation folder instead.
-pub fn cleanup_tracing() {
-    let mut log_file_path = LOGFILE_PATH.lock().unwrap();
-
-    if let Some(file_path) = log_file_path.as_ref() {
-        if simulation_has_error() {
-            // Move the log file to the current working directory
-            let new_file_path = std::env::current_dir()
-                .expect("Failed to get current directory")
-                .join(format!("error_{}", get_log_filename()));
-            let new_file_path_str = new_file_path.clone().to_str().unwrap().to_owned();
-            // remove if the file already exists
-            if new_file_path.exists() {
-                std::fs::remove_file(&new_file_path).expect("Failed to remove existing log file");
-            }
-            std::fs::copy(file_path, &new_file_path).expect("Failed to move log file");
-            log_in_trnsys(
-                Level::INFO,
-                None,
-                &format!(
-                    "Simulation stopped due to error. Log file moved to current directory: {}",
-                    new_file_path_str
-                ),
-            );
-        }
-
-        std::fs::remove_file(file_path).expect("Failed to remove log file");
-
-        *log_file_path = None;
-    }
-}
